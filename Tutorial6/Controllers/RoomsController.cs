@@ -38,8 +38,33 @@ namespace Tutorial6.Controllers
                 return NotFound();
             return Ok(room);
         }
-        
-        
+
+      
+        [Route("filter")]
+        [HttpGet]
+        public IActionResult GetRooms([FromQuery] int? minCapacity, [FromQuery] bool? hasProjector, [FromQuery] bool? activeOnly)
+        {
+            var filteredRooms = DataStore.Rooms.AsQueryable();
+            
+            if (minCapacity.HasValue)
+            {
+                filteredRooms = filteredRooms.Where(r => r.Capacity >= minCapacity.Value);
+            }
+
+            if (hasProjector.HasValue)
+            {
+                filteredRooms = filteredRooms.Where(r => r.HasProjector == hasProjector.Value);
+            }
+
+            if (activeOnly.HasValue && activeOnly.Value)
+            {
+                filteredRooms = filteredRooms.Where(r => r.IsActive == true);
+            }
+            
+            return Ok(filteredRooms.ToList());
+        }
+
+
         [HttpPost]
         public IActionResult Post([FromBody] CreateRoomDto createRoomDto)
         {
@@ -57,6 +82,26 @@ namespace Tutorial6.Controllers
             DataStore.Rooms.Add(room);
             return CreatedAtAction(nameof(GetById), new { Id = room.Id }, room);
         }
-  
+
+        [Route("{id}")]
+        [HttpPut]
+        public IActionResult UpdateRoom(int id, [FromBody] Room updatedRoom)
+        {
+
+            var existingRoom = DataStore.Rooms.FirstOrDefault(r => r.Id == id);
+            if (existingRoom == null)
+            {
+                return NotFound($"Room with ID {id} not found.");
+            }
+            
+            existingRoom.Name = updatedRoom.Name;
+            existingRoom.BuildingCode = updatedRoom.BuildingCode;
+            existingRoom.Floor = updatedRoom.Floor;
+            existingRoom.Capacity = updatedRoom.Capacity;
+            existingRoom.HasProjector = updatedRoom.HasProjector;
+            existingRoom.IsActive = updatedRoom.IsActive;
+
+            return Ok(existingRoom);
+        }
     }
 }
