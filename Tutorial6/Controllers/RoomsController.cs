@@ -12,35 +12,29 @@ namespace Tutorial6.Controllers
     [ApiController]
     public class RoomsController : ControllerBase
     {
-        [HttpGet]
-        public IActionResult Get()
-        {
-            return Ok(DataStore.Rooms);
-        }
-        
-        
         [Route("{id}")]
         [HttpGet]
         public IActionResult GetById([FromRoute] int id)
         {
             var room = DataStore.Rooms.FirstOrDefault(x => x.Id == id);
             if (room == null)
-                return NotFound();
+                return NotFound("There is not room with id: " + id);
             return Ok(room);
         }
 
         [Route("building/{buildingCode}")]
         [HttpGet]
-        public IActionResult GetByBuilding([FromRoute] string buildingcode)
+        public IActionResult GetByBuilding([FromRoute] string buildingCode)
         {
-            var room = DataStore.Rooms.FirstOrDefault(x => x.BuildingCode == buildingcode);
-            if (room == null)
-                return NotFound();
-            return Ok(room);
+            var rooms = DataStore.Rooms
+                .Where(x => x.BuildingCode.Equals(buildingCode, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (rooms.Count == 0)
+                return NotFound("There are no rooms in the building: " + buildingCode);
+            return Ok(rooms);
         }
 
-      
-        [Route("filter")]
+        
         [HttpGet]
         public IActionResult GetRooms([FromQuery] int? minCapacity, [FromQuery] bool? hasProjector, [FromQuery] bool? activeOnly)
         {
@@ -70,7 +64,7 @@ namespace Tutorial6.Controllers
         {
             var room = new Room()
             {
-                Id = DataStore.Rooms.Count + 1,
+                Id = DataStore.Rooms.Max(r => r.Id) + 1,
                 Name = createRoomDto.Name,
                 Capacity = createRoomDto.Capacity,
                 BuildingCode = createRoomDto.BuildingCode,
@@ -102,6 +96,25 @@ namespace Tutorial6.Controllers
             existingRoom.IsActive = updatedRoom.IsActive;
 
             return Ok(existingRoom);
+        }
+        
+        [Route("{id}")]
+        [HttpDelete]
+        public IActionResult DeleteRoom([FromRoute] int id)
+        {
+            var room = DataStore.Rooms.FirstOrDefault(x => x.Id == id);
+
+            if (room == null)
+            {
+                return NotFound("There is no room wiht id: " + id);
+            }
+            var hasReservations = DataStore.Reservations.Any(res => res.RoomId == id);
+            if (hasReservations)
+                return Conflict("Cannot delete room because it has reservations.");
+
+            DataStore.Rooms.Remove(room);
+            return NoContent();
+
         }
     }
 }
