@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Tutorial6.DTOs;
 using Tutorial6.Models;
@@ -8,93 +7,82 @@ namespace Tutorial6.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ReservationController : ControllerBase
+    public class ReservationsController : ControllerBase
     {
-        public IActionResult Get()
-        {
-            return Ok(DataStore.Reservations);
-        }
-        
-        [Route("{id}")]
         [HttpGet]
-        public IActionResult GetById([FromRoute] int id)
-        {
-            var reservation = DataStore.Reservations.FirstOrDefault(x => x.Id == id);
-            if (reservation == null)
-                return NotFound();
-            return Ok(reservation);
-        }
-        
-        [Route("filter")]
-        [HttpGet]
-        public IActionResult GetReservations([FromQuery] DateTime? date, [FromQuery] string? status, [FromQuery] int? roomId)
+        public IActionResult Get([FromQuery] DateTime? date, [FromQuery] string? status, [FromQuery] int? roomId)
         {
             var query = DataStore.Reservations.AsQueryable();
-            
+
             if (date.HasValue)
-            {
                 query = query.Where(r => r.Date.Date == date.Value.Date);
-            }
-            
+
             if (!string.IsNullOrEmpty(status))
-            {
                 query = query.Where(r => r.Status.Equals(status, StringComparison.OrdinalIgnoreCase));
-            }
-            
+
             if (roomId.HasValue)
-            {
                 query = query.Where(r => r.RoomId == roomId.Value);
-            }
-    
+
             return Ok(query.ToList());
+        }
+        
+        [HttpGet("{id}")]
+        public IActionResult GetById(int id)
+        {
+            var res = DataStore.Reservations.FirstOrDefault(x => x.Id == id);
+            if (res == null) return NotFound();
+            return Ok(res);
         }
 
         [HttpPost]
-        public IActionResult Post([FromBody] CreateReservationDto createReservation)
+        public IActionResult Post([FromBody] Reservation res)
         {
-            var reservation = new Reservation()
-            {
-                RoomId = createReservation.RoomId,
-                OrganizerName = createReservation.OrganizerName,
-                Date = createReservation.Date,
-                StartTime = createReservation.StartTime,
-                EndTime = createReservation.EndTime,
-                Status = createReservation.Status,
-            };
-            
-            DataStore.Reservations.Add(reservation);
-            return Ok("Created reservation with ID: " + reservation.Id);
+            if (res.EndTime <= res.StartTime)
+                return BadRequest("EndTime must be later than StartTime.");
+
+            var room = DataStore.Rooms.FirstOrDefault(r => r.Id == res.RoomId);
+            if (room == null) return NotFound("Room not found.");
+            if (!room.IsActive) return BadRequest("Room is inactive.");
+
+            bool isOverlapping = DataStore.Reservations.Any(r => 
+                r.RoomId == res.RoomId && 
+                r.Date.Date == res.Date.Date && 
+                res.StartTime < r.EndTime && r.StartTime < res.EndTime);
+
+            if (isOverlapping)
+                return Conflict("Room is already reserved for this time.");
+
+            res.Id = DataStore.Reservations.Any() ? DataStore.Reservations.Max(r => r.Id) + 1 : 1;
+            DataStore.Reservations.Add(res);
+
+            return CreatedAtAction(nameof(GetById), new { id = res.Id }, res);
         }
         
-        
-        [HttpPut]
-        public IActionResult UpdateReservation(int id, [FromBody] Reservation updatedReservation)
+        [HttpPut("{id}")]
+        public IActionResult Update(int id, [FromBody] Reservation updated)
         {
-
-            var existingReservation = DataStore.Reservations.FirstOrDefault(r => r.Id == id);
-            if (existingReservation == null)
-            {
-                return NotFound($"Room with ID {id} not found.");
-            }
+            var existing = DataStore.Reservations.FirstOrDefault(r => r.Id == id);
+            if (existing == null) return NotFound();
             
-            existingReservation.RoomId = updatedReservation.RoomId;
-            existingReservation.OrganizerName = updatedReservation.OrganizerName;
-            existingReservation.Topic = updatedReservation.Topic;
-            existingReservation.Date = updatedReservation.Date;
-            existingReservation.StartTime = updatedReservation.StartTime;
-            existingReservation.EndTime = updatedReservation.EndTime;
-            existingReservation.Status = existingReservation.Status;
+            existing.RoomId = updated.RoomId;
+            existing.OrganizerName = updated.OrganizerName;
+            existing.Topic = updated.Topic;
+            existing.Date = updated.Date;
+            existing.StartTime = updated.StartTime;
+            existing.EndTime = updated.EndTime;
+            existing.Status = updated.Status;
 
-            return Ok(existingReservation);
+            return Ok(existing);
         }
 
-        [HttpDelete]
-        public IActionResult DeleteReservation(int id)
+        [HttpDelete("{id}")]
+        public IActionResult Delete(int id)
         {
-            var reservations = DataStore.Reservations.FirstOrDefault(x => x.Id == id);
-            
-            DataStore.Reservations.Remove(reservations);
-            return Ok("Deleted reservation with ID: " + id);
+            var res = DataStore.Reservations.FirstOrDefault(x => x.Id == id);
+            if (res == null) return NotFound();
+
+            DataStore.Reservations.Remove(res);
+            return NoContent();
         }
     }
 }
