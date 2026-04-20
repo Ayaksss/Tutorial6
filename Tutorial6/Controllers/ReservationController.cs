@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Tutorial6.DTOs;
 using Tutorial6.Models;
 using Tutorial6.Helpers;
 
@@ -41,7 +40,8 @@ namespace Tutorial6.Controllers
                 return BadRequest("EndTime must be later than StartTime.");
 
             var room = DataStore.Rooms.FirstOrDefault(r => r.Id == res.RoomId);
-            if (room == null) return NotFound("Room not found.");
+            if (room == null) return NotFound("Room does not exist.");
+            
             if (!room.IsActive) return BadRequest("Room is inactive.");
 
             bool isOverlapping = DataStore.Reservations.Any(r => 
@@ -50,7 +50,7 @@ namespace Tutorial6.Controllers
                 res.StartTime < r.EndTime && r.StartTime < res.EndTime);
 
             if (isOverlapping)
-                return Conflict("Room is already reserved for this time.");
+                return Conflict("Reservation overlaps with an existing one.");
 
             res.Id = DataStore.Reservations.Any() ? DataStore.Reservations.Max(r => r.Id) + 1 : 1;
             DataStore.Reservations.Add(res);
@@ -64,6 +64,15 @@ namespace Tutorial6.Controllers
             var existing = DataStore.Reservations.FirstOrDefault(r => r.Id == id);
             if (existing == null) return NotFound();
             
+            bool isOverlapping = DataStore.Reservations.Any(r => 
+                r.Id != id &&
+                r.RoomId == updated.RoomId && 
+                r.Date.Date == updated.Date.Date && 
+                updated.StartTime < r.EndTime && r.StartTime < updated.EndTime);
+
+            if (isOverlapping)
+                return Conflict("Updated reservation would overlap with an existing one.");
+
             existing.RoomId = updated.RoomId;
             existing.OrganizerName = updated.OrganizerName;
             existing.Topic = updated.Topic;
